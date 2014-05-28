@@ -4,3 +4,4 @@ before_script:
   - sudo apt-get install -y libicu-dev libsqlite3-dev sqlite3
 script:
   - gcc -shared icu.c `icu-config --ldflags` -fPIC -o libSqliteIcu.so
+  - sqlite3 :memory < test/testIcuExtension.sql
