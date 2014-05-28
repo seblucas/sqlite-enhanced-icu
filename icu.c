@@ -9,6 +9,12 @@
 **    May you share freely, never taking more than you give.
 **
 *************************************************************************
+** 2014 May 28
+**
+** All code added by Sébastien Lucas (check the file history for detail)
+** is copyrighted and is available under the GPLv2 license
+**
+*************************************************************************
 ** $Id: icu.c,v 1.7 2007/12/13 21:54:11 drh Exp $
 **
 ** This file implements an integration between the ICU library 
