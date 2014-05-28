@@ -10,7 +10,25 @@ It's based on [these files](http://www.sqlite.org/src/tree?name=ext/icu) from SQ
 
 ## Features
 
-TODO
+### Original features
+
+Please check the original [README.txt](README.txt).
+
+### New `contains` function
+
+This function will do an [asymetrical string search](http://userguide.icu-project.org/collation/icu-string-search-service) (using ICU). So you can do a diacritics aware search like that :
+
+```sql
+sqlite> select string from myTable where contains ('e', myColumn);
+e
+é
+è
+ê
+ë
+E
+Ê
+É
+```
 
 ## How to build
 

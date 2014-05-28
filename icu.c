@@ -33,6 +33,7 @@
 /* Include ICU headers */
 #include <unicode/utypes.h>
 #include <unicode/uregex.h>
+#include <unicode/usearch.h>
 #include <unicode/ustring.h>
 #include <unicode/ucol.h>
 
@@ -212,6 +213,95 @@ static void icuFunctionError(
   zBuf[127] = '\0';
   sqlite3_result_error(pCtx, zBuf, -1);
 }
+
+/*
+** Function to delete compiled contains objects. Registered as
+** a destructor function with sqlite3_set_auxdata().
+*/
+static void icuContainsDelete(void *p){
+  UStringSearch *pSearch = (UStringSearch *)p;
+  usearch_close(pSearch);
+}
+
+/*
+** Implementation of SQLite CONTAINS operator. This scalar function takes
+** two arguments. The first is a searched string expression to search
+** the second is a string to match against that searched string. If either
+** argument is an SQL NULL, then NULL Is returned. Otherwise, the result
+** is 1 if the string matches the searched string, or 0 otherwise.
+**
+** SQLite maps the contains() function to the contains() operator such
+** that the following two are equivalent:
+**
+**     zString CONTAINS zPattern
+**     contains(zPattern, zString)
+**
+** Uses the following ICU search APIs:
+**
+**     usearch_open()
+**     usearch_first()
+**     usearch_close()
+*/
+static void icuContainsFunc(sqlite3_context *p, int nArg, sqlite3_value **apArg){
+  UErrorCode status = U_ZERO_ERROR;
+  UStringSearch *pExpr;
+  UBool res;
+  const UChar *zString = sqlite3_value_text16(apArg[1]);
+
+  (void)nArg;  /* Unused parameter */
+
+  /* If the left hand side of the contains operator is NULL,
+  ** then the result is also NULL.
+  */
+  if( !zString ){
+    return;
+  }
+
+  pExpr = sqlite3_get_auxdata(p, 0);
+  if( !pExpr ){
+    const UChar *zPattern = sqlite3_value_text16(apArg[0]);
+    if( !zPattern ){
+      return;
+    }
+    pExpr = usearch_open(zPattern, -1, zString, -1, "fr_fr", NULL, &status);
+    
+    if( U_SUCCESS(status) ){
+      sqlite3_set_auxdata(p, 0, pExpr, icuContainsDelete);
+    }else{
+      assert(!pExpr);
+      icuFunctionError(p, "usearch_open", status);
+      return;
+    }
+
+    usearch_setAttribute (pExpr, USEARCH_ELEMENT_COMPARISON, USEARCH_PATTERN_BASE_WEIGHT_IS_WILDCARD, &status);
+    if( !U_SUCCESS(status) ){
+      icuFunctionError(p, "usearch_setAttribute", status);
+      return;
+    }
+
+  }
+
+  /* Configure the text that the search operates on. */
+  usearch_setText(pExpr, zString, -1, &status);
+  if( !U_SUCCESS(status) ){
+    icuFunctionError(p, "usearch_setText", status);
+    return;
+  }
+
+  /* Attempt the match */
+  int pos = usearch_first(pExpr, &status);
+  if( !U_SUCCESS(status) ){
+    icuFunctionError(p, "usearch_first", status);
+    return;
+  }
+
+  usearch_setText(pExpr, 0, 0, &status);
+
+  /* Return 1 or 0. */
+  sqlite3_result_int(p, pos != USEARCH_DONE ? 1 : 0);
+}
+
+
 
 /*
 ** Function to delete compiled regexp objects. Registered as
@@ -457,6 +547,7 @@ int sqlite3IcuInit(sqlite3 *db){
     void (*xFunc)(sqlite3_context*,int,sqlite3_value**);
   } scalars[] = {
     {"regexp", 2, SQLITE_ANY,          0, icuRegexpFunc},
+    {"contains", 2, SQLITE_ANY,          0, icuContainsFunc},
 
     {"lower",  1, SQLITE_UTF16,        0, icuCaseFunc16},
     {"lower",  2, SQLITE_UTF16,        0, icuCaseFunc16},
