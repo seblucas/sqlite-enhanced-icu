@@ -1,0 +1,6 @@
+language: c
+before_script:
+  - sudo apt-get update -qq
+  - sudo apt-get install -y libicu-dev libsqlite3-dev sqlite3
+script:
+  - gcc -shared icu.c `icu-config --ldflags` -fPIC -o libSqliteIcu.so
